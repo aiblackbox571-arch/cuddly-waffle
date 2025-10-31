@@ -147,13 +147,10 @@ def checker_crunchy():
 
         json_body = safe_get_json(resp.text)
         if json_body:
-            json_body["status_indicator"] = status_emoji
             return jsonify(json_body), 200
 
         return jsonify({
             "result": resp.text[:200],
-            "status_code": resp.status_code,
-            "status_indicator": status_emoji
         }), 200
 
     except Exception as e:
@@ -236,4 +233,5 @@ def checker_authnet():
 # ---- Run App ----
 if __name__ == "__main__":
     app.run(debug=True)
+
 
