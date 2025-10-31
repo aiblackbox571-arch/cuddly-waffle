@@ -56,53 +56,6 @@ def get_status_emoji(response_time):
     else:
         return "🧡 Dead"
 
-# ---- Heartbeat Endpoint ----
-@app.route("/api/v1/heartbeat", methods=["GET"])
-def heartbeat():
-    """
-    Returns real-time status (with emojis) of all external endpoints.
-    """
-    endpoints = {
-        "stripe_checker": "https://rockyysoon-fb0f.onrender.com/index.php",
-        "crunchyroll_checker": "https://crunchy-ng.vercel.app/",
-        "authnet_api": "https://api2.authorize.net/xml/v1/request.api"
-    }
-
-    status_report = {}
-    for name, url in endpoints.items():
-        start = time.time()
-        try:
-            resp = requests.head(url, timeout=3)
-            elapsed = time.time() - start
-            status_report[name] = {
-                "url": url,
-                "emoji": get_status_emoji(elapsed),
-                "status_code": resp.status_code,
-                "response_time": round(elapsed, 3)
-            }
-        except requests.exceptions.Timeout:
-            status_report[name] = {
-                "url": url,
-                "emoji": "🧡 Dead",
-                "status_code": None,
-                "response_time": None
-            }
-        except Exception as e:
-            status_report[name] = {
-                "url": url,
-                "emoji": "🧡 Dead",
-                "error": str(e),
-                "status_code": None,
-                "response_time": None
-            }
-
-    return jsonify({
-        "service": "💓 Card & Combo Checker Heartbeat",
-        "developer": "💻 Sukhraj",
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "status": status_report
-    }), 200
-
 # ---- Home Page ----
 START_TIME = time.time()
 
@@ -125,8 +78,8 @@ def home():
 ╠════════════════════════════════════════════════════════════╣
 ║ 📡  API Endpoints:                                          ║
 ║    • /api/v1/checker/cc/shopify    → Shopify CC checker    ║
-║    • /api/v1/checker/cc/authnet     → Auth.net CC checker   ║
-║    • /api/v1/checker/crunchyroll    → Crunchyroll combo chk ║
+║    • /api/v1/checker/cc/authnet    → Auth.net CC checker   ║
+║    • /api/v1/checker/crunchyroll   → Crunchyroll combo chk ║
 ╠════════════════════════════════════════════════════════════╣
 ║ ⚙️  Version  : 1.0.0                                        ║
 ║ 🌐  Status   : ✅ Online & Healthy                          ║
@@ -139,8 +92,7 @@ def home():
     )
 
 
-
-# ---- Existing Endpoints (Stripe, Crunchyroll, Authnet) ----
+# ---- Existing Endpoints (Stripe/Shopify, Crunchyroll, Auth.net) ----
 @app.route("/api/v1/checker/cc/shopify", methods=["POST", "GET"])
 def checker_cc():
     try:
@@ -175,7 +127,7 @@ def checker_cc():
         }), 200
 
     except Exception as e:
-        logger.exception("Stripe checker failed")
+        logger.exception("Shopify checker failed")
         return jsonify({"error": str(e)}), 500
 
 
@@ -287,5 +239,3 @@ def checker_authnet():
 # ---- Run App ----
 if __name__ == "__main__":
     app.run(debug=True)
-
-
