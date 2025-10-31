@@ -104,10 +104,17 @@ def heartbeat():
     }), 200
 
 # ---- Home Page ----
+START_TIME = time.time()
+
 @app.route("/", methods=["GET"])
 def home():
+    uptime = time.time() - START_TIME
+    hours, remainder = divmod(int(uptime), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    uptime_str = f"{hours}h {minutes}m {seconds}s"
+
     return (
-        """
+        f"""
 ╔════════════════════════════════════════════════════════════╗
 ║               💳  Card & Combo Checker API                 ║
 ╠════════════════════════════════════════════════════════════╣
@@ -117,14 +124,13 @@ def home():
 ║     and verify Crunchyroll combos via GET/POST requests.   ║
 ╠════════════════════════════════════════════════════════════╣
 ║ 📡  API Endpoints:                                          ║
-║    • /api/v1/checker/cc/stripe      → Stripe-style CC check║
-║    • /api/v1/checker/cc/authnet     → Auth.net token check  ║
+║    • /api/v1/checker/cc/shopify    → Shopify CC checker    ║
+║    • /api/v1/checker/cc/authnet     → Auth.net CC checker   ║
 ║    • /api/v1/checker/crunchyroll    → Crunchyroll combo chk ║
-║    • /api/v1/heartbeat              → ❤️  Real-time status   ║
 ╠════════════════════════════════════════════════════════════╣
 ║ ⚙️  Version  : 1.0.0                                        ║
 ║ 🌐  Status   : ✅ Online & Healthy                          ║
-║ 🕒  Live Since: 2025-10-31 10:46:38                         ║
+║ 🕒  Uptime    : {uptime_str}                                ║
 ║ 💡  Note     : Use POST for secure or bulk requests.        ║
 ╚════════════════════════════════════════════════════════════╝
         """,
@@ -133,8 +139,9 @@ def home():
     )
 
 
+
 # ---- Existing Endpoints (Stripe, Crunchyroll, Authnet) ----
-@app.route("/api/v1/checker/cc/stripe", methods=["POST", "GET"])
+@app.route("/api/v1/checker/cc/shopify", methods=["POST", "GET"])
 def checker_cc():
     try:
         start = time.time()
@@ -280,4 +287,5 @@ def checker_authnet():
 # ---- Run App ----
 if __name__ == "__main__":
     app.run(debug=True)
+
 
