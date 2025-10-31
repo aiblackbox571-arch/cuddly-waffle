@@ -104,34 +104,34 @@ def heartbeat():
     }), 200
 
 # ---- Home Page ----
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
-    start = time.time()
-    status_check = get_status_emoji(time.time() - start)
     return (
-        f"""
-        <h1>💳 Card & Combo Checker API</h1>
-        <p><b>Developer:</b> 💻 Sukhraj</p>
-        <p><b>Description:</b> Simple API to check cards, generate tokens (Auth.net), 
-        and verify Crunchyroll combos using GET/POST methods.</p>
-        <hr>
-        <h3>📡 API Endpoints:</h3>
-        <ul>
-            <li><b>/api/v1/checker/cc/stripe</b> — Stripe-style CC validation</li>
-            <li><b>/api/v1/checker/cc/authnet</b> — Auth.net token + payment check</li>
-            <li><b>/api/v1/checker/crunchyroll</b> — Crunchyroll combo verification</li>
-            <li><b>/api/v1/heartbeat</b> — 💓 Real-time service status</li>
-        </ul>
-        <hr>
-        <p><b>Status:</b> {status_check}</p>
-        <p><b>Version:</b> 1.0.0</p>
-        <p><b>Note:</b> Use <code>POST</code> for secure/bulk checks.</p>
-        <hr>
-        <p>✨ Live since: {time.strftime("%Y-%m-%d %H:%M:%S")}</p>
+        """
+╔════════════════════════════════════════════════════════════╗
+║               💳  Card & Combo Checker API                 ║
+╠════════════════════════════════════════════════════════════╣
+║ 👨‍💻  Developer : Sukhraj                                   ║
+║ 🧾  Description:                                            ║
+║     A clean API to check cards, generate Auth.net tokens,  ║
+║     and verify Crunchyroll combos via GET/POST requests.   ║
+╠════════════════════════════════════════════════════════════╣
+║ 📡  API Endpoints:                                          ║
+║    • /api/v1/checker/cc/stripe      → Stripe-style CC check║
+║    • /api/v1/checker/cc/authnet     → Auth.net token check  ║
+║    • /api/v1/checker/crunchyroll    → Crunchyroll combo chk ║
+║    • /api/v1/heartbeat              → ❤️  Real-time status   ║
+╠════════════════════════════════════════════════════════════╣
+║ ⚙️  Version  : 1.0.0                                        ║
+║ 🌐  Status   : ✅ Online & Healthy                          ║
+║ 🕒  Live Since: 2025-10-31 10:46:38                         ║
+║ 💡  Note     : Use POST for secure or bulk requests.        ║
+╚════════════════════════════════════════════════════════════╝
         """,
         200,
-        {"Content-Type": "text/html"},
+        {"Content-Type": "text/plain; charset=utf-8"},
     )
+
 
 # ---- Existing Endpoints (Stripe, Crunchyroll, Authnet) ----
 @app.route("/api/v1/checker/cc/stripe", methods=["POST", "GET"])
@@ -280,3 +280,4 @@ def checker_authnet():
 # ---- Run App ----
 if __name__ == "__main__":
     app.run(debug=True)
+
