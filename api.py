@@ -48,7 +48,6 @@ def random_email():
 def mask_card(card):
     return card[:6] + "*" * (len(card) - 10) + card[-4:] if len(card) >= 10 else "*" * len(card)
 
-# ---- Status Function ----
 def get_status_emoji(response_time):
     if response_time < 1:
         return "💚 Online"
@@ -57,7 +56,54 @@ def get_status_emoji(response_time):
     else:
         return "🧡 Dead"
 
-# ---- Home Route ----
+# ---- Heartbeat Endpoint ----
+@app.route("/api/v1/heartbeat", methods=["GET"])
+def heartbeat():
+    """
+    Returns real-time status (with emojis) of all external endpoints.
+    """
+    endpoints = {
+        "stripe_checker": "https://rockyysoon-fb0f.onrender.com/index.php",
+        "crunchyroll_checker": "https://crunchy-ng.vercel.app/",
+        "authnet_api": "https://api2.authorize.net/xml/v1/request.api"
+    }
+
+    status_report = {}
+    for name, url in endpoints.items():
+        start = time.time()
+        try:
+            resp = requests.head(url, timeout=3)
+            elapsed = time.time() - start
+            status_report[name] = {
+                "url": url,
+                "emoji": get_status_emoji(elapsed),
+                "status_code": resp.status_code,
+                "response_time": round(elapsed, 3)
+            }
+        except requests.exceptions.Timeout:
+            status_report[name] = {
+                "url": url,
+                "emoji": "🧡 Dead",
+                "status_code": None,
+                "response_time": None
+            }
+        except Exception as e:
+            status_report[name] = {
+                "url": url,
+                "emoji": "🧡 Dead",
+                "error": str(e),
+                "status_code": None,
+                "response_time": None
+            }
+
+    return jsonify({
+        "service": "💓 Card & Combo Checker Heartbeat",
+        "developer": "💻 Sukhraj",
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "status": status_report
+    }), 200
+
+# ---- Home Page ----
 @app.route("/")
 def home():
     start = time.time()
@@ -74,19 +120,20 @@ def home():
             <li><b>/api/v1/checker/cc/stripe</b> — Stripe-style CC validation</li>
             <li><b>/api/v1/checker/cc/authnet</b> — Auth.net token + payment check</li>
             <li><b>/api/v1/checker/crunchyroll</b> — Crunchyroll combo verification</li>
+            <li><b>/api/v1/heartbeat</b> — 💓 Real-time service status</li>
         </ul>
         <hr>
         <p><b>Status:</b> {status_check}</p>
         <p><b>Version:</b> 1.0.0</p>
         <p><b>Note:</b> Use <code>POST</code> for secure/bulk checks.</p>
         <hr>
-        <p>✨ Status: {time.strftime("%Y-%m-%d %H:%M:%S")}</p>
+        <p>✨ Live since: {time.strftime("%Y-%m-%d %H:%M:%S")}</p>
         """,
         200,
         {"Content-Type": "text/html"},
     )
 
-# ---- Stripe BIN/Credit Card Checker ----
+# ---- Existing Endpoints (Stripe, Crunchyroll, Authnet) ----
 @app.route("/api/v1/checker/cc/stripe", methods=["POST", "GET"])
 def checker_cc():
     try:
@@ -124,7 +171,7 @@ def checker_cc():
         logger.exception("Stripe checker failed")
         return jsonify({"error": str(e)}), 500
 
-# ---- Crunchyroll Combo Checker ----
+
 @app.route("/api/v1/checker/crunchyroll", methods=["POST", "GET"])
 def checker_crunchy():
     try:
@@ -157,7 +204,7 @@ def checker_crunchy():
         logger.exception("Crunchyroll checker failed")
         return jsonify({"error": str(e)}), 500
 
-# ---- Auth.net (Token + Payment) ----
+
 def generate_token(card_number, expiration_date, cvv):
     url = "https://api2.authorize.net/xml/v1/request.api"
     payload = {
@@ -185,6 +232,7 @@ def generate_token(card_number, expiration_date, cvv):
         return {"ok": False, "error": "Token not found"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
 
 @app.route("/api/v1/checker/cc/authnet", methods=["GET", "POST"])
 def checker_authnet():
@@ -228,6 +276,7 @@ def checker_authnet():
         logger.exception("Authnet checker failed")
         return jsonify({"error": str(e)}), 500
 
-# ---- Run ----
+
+# ---- Run App ----
 if __name__ == "__main__":
     app.run(debug=True)
